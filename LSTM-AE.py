@@ -13,15 +13,15 @@ with open("Config/config.json", "r") as f:
 f.close()
 
 ## Load the data from the CSV file
-train_data = pd.read_csv('./Dataset/train7.csv')
-test_data = pd.read_csv('./Dataset/DriveCycle10-test-100.csv')
-nom_data = pd.read_csv('./Dataset/test.csv')        # To check the performance of ML model
+train_data = pd.read_csv(train_path)
+test_data = pd.read_csv(test_path)
+nom_data = pd.read_csv(validate_path)        # To check the performance of ML model
 
 
 def FeatureSelection(drop_column, data):
     return data.drop(drop_column, axis=1)      # To check the performance of ML model
 
-timesteps = 25   # dataset have 100 ms sample rate for each sec we create 10 dataset a input
+timesteps = 25   # window size for time series data
 
 def Preprocessing(train_data, test_data, nom_data):
     #normalise test/train
@@ -60,13 +60,6 @@ import pandas as pd
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, LSTM, Dropout, RepeatVector, TimeDistributed
 from tensorflow import keras
-
-## For Plots font size
-font = {'family' : 'normal',
-        'weight' : 'bold',
-        'size'   : 22}
-
-plt.rc('font', **font)
 
 CONFIG.settings.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print("Selected device: {}".format(CONFIG.settings.device))
@@ -127,14 +120,10 @@ def plot_loss_moment(history):
 
 plot_loss_moment(history)       #history.loss
 
-# %%
-from scipy import signal
-
 pred = model.predict(x_test)
 
 def deshape(data):
     data = np.mean(data,axis = 1)
-    #data = np.reshape(data,(data.shape[0]*data.shape[1],data.shape[2]))
     return data
 
 #pred = Noise(pred)
@@ -151,9 +140,9 @@ def Plot(d, pd, title):
 Plot(deshape(x_test), deshape(pred), 'Normal vs Reconstructed data of Anomalous DC')
 
 # %%
-train_data = pd.read_csv('./Dataset/train7.csv')
-nom_data = pd.read_csv('./Dataset/DriveCycle4-test-100.csv')
-test_data = pd.read_csv('./Dataset/DriveCycle4-test-10.csv')
+train_data = pd.read_csv(train_path)
+nom_data = pd.read_csv(validate_path)
+test_data = pd.read_csv(test_path)
 x_train, x_test, nom, _ = Preprocessing(train_data, test_data, nom_data)
 
 # %%
@@ -162,7 +151,6 @@ def Predict(data, model):
     mae_loss = np.mean(np.mean(np.abs(pred - data), axis=1),axis=1)
     loss = np.mean(np.abs(pred - data), axis=2)
     loss = np.reshape(loss,(loss.shape[0]*loss.shape[1]))
-    #print('loss', mae_loss)
     error_mean = np.mean(mae_loss,axis=0)
     error_std = np.std(mae_loss,axis=0)
     return mae_loss, loss, error_mean, error_std
@@ -202,14 +190,10 @@ def JudgeAnomaly(data,loss,threshold):
     return normal, abnormal, res
 
 threshold = 0.4
+
 pred_normal, pred_abnormal, pred_res = JudgeAnomaly(x_test, test_mae_loss, threshold)
 Anomaly_plot(x_test, pred_abnormal,'Predicted Anomaly')
 #print('anomaly detection: ',pred_abnormal.shape[0]*100/x_test.shape[0],'%')
-
-#threshold = 0.5
-act_normal, act_abnormal, nom_res = JudgeAnomaly(nom, mae_loss, threshold)
-Anomaly_plot(nom, act_abnormal, 'Actual Anomaly')
-#print('anomaly detection: ',act_abnormal.shape[0]*100/nom.shape[0],'%')
 
 # %%
 from sklearn.metrics import roc_auc_score
@@ -231,37 +215,5 @@ def Performance(pred_abnormal,pred_normal,act_abnormal,act_normal, pred, nom):
     Recall = TP/(TP+FN)
     F1 = (2*Precision*Recall)/(Precision+Recall)
     return Accuracy, F1, AUC
-
-
-thresholds = np.arange(0.2,0.6,0.01)
-Accuracy = []
-F1 = []
-AUC = []
-for threshold in thresholds:
-    pred_normal, pred_abnormal, pred_res = JudgeAnomaly(x_test, test_mae_loss, threshold)
-    act_normal, act_abnormal, nom_res = JudgeAnomaly(nom, mae_loss, threshold)
-    acc, f1, auc = Performance(pred_abnormal,pred_normal,act_abnormal,act_normal, pred_res, nom_res)
-    Accuracy.append(acc*100)
-    F1.append(f1*100)
-    AUC.append(auc*100)
-
-
-plt.figure(figsize=(10,8))
-plt.plot(thresholds, Accuracy,'r', label ='Accuracy')
-plt.plot(thresholds,F1,'b',label = 'F1-score')
-plt.plot(thresholds,AUC,'g',label = 'AUC-score')
-plt.xlabel('Threshold')
-plt.ylabel('Percentage')
-plt.ylim(50,100)
-plt.xlim(thresholds[0],thresholds[-1])
-plt.title('Threshold vs Model Performance')
-plt.legend()
-plt.grid(linestyle='-.')
-plt.show()
-
-max(Accuracy)
-
-# %%
-
 
 
